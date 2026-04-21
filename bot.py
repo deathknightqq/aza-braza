@@ -445,6 +445,8 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     save_data(data)
 
+# ── ЗАПУСК ───────────────────────────────
+
 def main():
     if not BOT_TOKEN:
         raise ValueError("Переменная окружения BOT_TOKEN не задана")
