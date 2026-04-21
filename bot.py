@@ -362,20 +362,21 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user = get_user(uid, data)
     cb = q.data
 
-    if cb.startswith("class_"):
-        cls_id = cb[6:]
-        if cls_id in CLASSES:
-            user["class"] = cls_id
-            save_data(data)
-            cls = CLASSES[cls_id]
-            await q.edit_message_text(
-                f"{cls['name']} *Класс выбран\\!*\n\n{cls['desc']}\n\n"
-                "/profile — посмотреть персонажа\n"
-                "/steps 5000 — записать шаги\n"
-                "/workout — тренировка\n"
-                "/help — все команды",
-                parse_mode="MarkdownV2"
-            )
+   if cb.startswith("class_"):
+    cls_id = cb[6:]
+    if cls_id in CLASSES:
+        user["class"] = cls_id
+        save_data(data)
+        cls = CLASSES[cls_id]
+        await q.edit_message_text(
+            f"{cls['name']} Класс выбран!\n\n"
+            f"{cls['desc']}\n\n"
+            "Команды:\n"
+            "/profile — посмотреть персонажа\n"
+            "/steps 5000 — записать шаги\n"
+            "/workout — тренировка\n"
+            "/help — все команды"
+        )
         return
 
     if cb.startswith("ex_") and cb != "ex_done":
