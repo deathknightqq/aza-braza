@@ -1,7 +1,6 @@
 import logging
 import json
 import os
-import asyncio
 from datetime import date
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -79,7 +78,8 @@ def get_user(uid, data):
 def get_title(level):
     t = "🥉 Новобранец"
     for lvl, title in TITLES.items():
-        if level >= lvl: t = title
+        if level >= lvl:
+            t = title
     return t
 
 def xp_next(level):
@@ -88,53 +88,71 @@ def xp_next(level):
 def add_xp(user, amount, source=""):
     bonus = 1.0
     cls = user.get("class")
-    if cls == "warrior" and source == "workout": bonus = 1.2
-    elif cls == "ranger" and source == "steps":  bonus = 1.2
-    elif cls == "mage"   and source == "food":   bonus = 1.2
-    if user["skills"].get("iron_will"): bonus += 0.1
+    if cls == "warrior" and source == "workout":
+        bonus = 1.2
+    elif cls == "ranger" and source == "steps":
+        bonus = 1.2
+    elif cls == "mage" and source == "food":
+        bonus = 1.2
+
+    if user["skills"].get("iron_will"):
+        bonus += 0.1
+
     final = int(amount * bonus)
     user["xp"] += final
     leveled = []
+
     while user["level"] < len(LEVEL_XP)-1 and user["xp"] >= xp_next(user["level"]):
         user["level"] += 1
         user["sp"] += 10
         leveled.append(user["level"])
+
     msg = f"+{final} XP"
-    if leveled: msg += f"\n🎉 *LEVEL UP!* Уровень {leveled[-1]}\\! +10 SP"
+    if leveled:
+        msg += f"\n🎉 *LEVEL UP!* Уровень {leveled[-1]}\\! +10 SP"
     return msg
 
 def boss_hit(user, dmg):
     bosses = [b for b in BOSSES if b["min_level"] <= user["level"]]
-    if not bosses: return ""
+    if not bosses:
+        return ""
+
     idx = min(user.get("boss_index", 0), len(bosses)-1)
     boss = bosses[idx]
-    if user["boss_hp"] is None: user["boss_hp"] = boss["hp"]
+
+    if user["boss_hp"] is None:
+        user["boss_hp"] = boss["hp"]
+
     user["boss_hp"] -= dmg
+
     if user["boss_hp"] <= 0:
         user["boss_hp"] = None
         user["boss_index"] = (user.get("boss_index", 0) + 1) % len(BOSSES)
         xp_msg = add_xp(user, boss["reward_xp"], "boss")
         user["sp"] += boss["reward_sp"]
         return f"\n\n⚔️ *БОСС ПОВЕРЖЕН\\!* {boss['name']}\n🏆 {xp_msg}, \\+{boss['reward_sp']} SP"
-    bar = "█" * int(user["boss_hp"]/boss["hp"]*10) + "░" * (10 - int(user["boss_hp"]/boss["hp"]*10))
-    return f"\n\n💥 Урон: \\-{dmg} HP\n{boss['name']}: {bar} {user['boss_hp']}/{boss['hp']}"
+
+    bar_text = "█" * int(user["boss_hp"] / boss["hp"] * 10) + "░" * (10 - int(user["boss_hp"] / boss["hp"] * 10))
+    return f"\n\n💥 Урон: \\-{dmg} HP\n{boss['name']}: {bar_text} {user['boss_hp']}/{boss['hp']}"
 
 def update_streak(user):
     today_str = str(date.today())
     last = user.get("last_active")
-    if last is None: user["streak"] = 1
-    elif last == today_str: pass
+
+    if last is None:
+        user["streak"] = 1
+    elif last == today_str:
+        pass
     else:
         from datetime import date as d
         last_date = d.fromisoformat(last)
         user["streak"] = user["streak"] + 1 if (date.today() - last_date).days == 1 else 1
+
     user["last_active"] = today_str
 
 def bar(cur, mx, n=12):
-    f = int(max(0,cur)/max(1,mx)*n)
-    return "█"*f + "░"*(n-f)
-
-# ── КОМАНДЫ ──────────────────────────────
+    f = int(max(0, cur) / max(1, mx) * n)
+    return "█" * f + "░" * (n - f)
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -142,15 +160,16 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user = get_user(uid, data)
     user["name"] = update.effective_user.first_name or "Герой"
     save_data(data)
+
     await update.message.reply_text(
         f"⚔️ *Добро пожаловать в FITNESS RPG, {user['name']}\\!*\n\n"
         "Тело — это персонаж\\.\nТренировки и шаги — это XP\\.\nПобеждай боссов\\. Качай скиллы\\.\n\n"
         "Выбери свой *класс*:",
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("⚔️ Воин",    callback_data="class_warrior"),
+            InlineKeyboardButton("⚔️ Воин", callback_data="class_warrior"),
             InlineKeyboardButton("🏹 Рейнджер", callback_data="class_ranger"),
-            InlineKeyboardButton("🧙 Маг",      callback_data="class_mage"),
+            InlineKeyboardButton("🧙 Маг", callback_data="class_mage"),
         ]])
     )
 
@@ -159,8 +178,11 @@ async def profile(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = str(update.effective_user.id)
     user = get_user(uid, data)
     save_data(data)
+
     if not user["class"]:
-        await update.message.reply_text("Сначала выбери класс → /start"); return
+        await update.message.reply_text("Сначала выбери класс → /start")
+        return
+
     cls = CLASSES[user["class"]]
     lvl = user["level"]
     xp = user["xp"]
@@ -172,7 +194,7 @@ async def profile(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     boss_line = ""
     bosses = [b for b in BOSSES if b["min_level"] <= lvl]
     if bosses:
-        idx = min(user.get("boss_index",0), len(bosses)-1)
+        idx = min(user.get("boss_index", 0), len(bosses)-1)
         boss = bosses[idx]
         hp = user["boss_hp"] if user["boss_hp"] is not None else boss["hp"]
         boss_line = f"\n\n🐉 *Босс:* {boss['name']}\n{bar(hp, boss['hp'], 10)} {hp}/{boss['hp']}"
@@ -200,51 +222,59 @@ async def steps_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = str(update.effective_user.id)
     user = get_user(uid, data)
     args = ctx.args
+
     if not args or not args[0].isdigit():
         await update.message.reply_text("Напиши: `/steps 8500`", parse_mode="Markdown")
-        save_data(data); return
+        save_data(data)
+        return
+
     steps = int(args[0])
     user["today"]["steps"] = steps
     xp_msg = add_xp(user, steps // 100, "steps")
     boss_msg = boss_hit(user, steps // 500)
     update_streak(user)
     save_data(data)
-    pct = min(100, int(steps/9000*100))
+
+    pct = min(100, int(steps / 9000 * 100))
     await update.message.reply_text(
-        f"👟 *Шаги: {steps:,}*\n{bar(steps,9000,12)} {pct}%\n\n{xp_msg}{boss_msg}",
+        f"👟 *Шаги: {steps:,}*\n{bar(steps, 9000, 12)} {pct}%\n\n{xp_msg}{boss_msg}",
         parse_mode="Markdown"
     )
 
 async def workout_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    data = load_data(); save_data(data)
+    data = load_data()
+    save_data(data)
+
     await update.message.reply_text(
         "🏋️ *Что сделал?* Выбирай:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🍑 Ягодичный мост", callback_data="ex_bridge"),
-             InlineKeyboardButton("🦵 Подъём ног",     callback_data="ex_leg_raise")],
-            [InlineKeyboardButton("🧗 Планка",         callback_data="ex_plank"),
-             InlineKeyboardButton("💪 Отжимания",      callback_data="ex_pushup")],
-            [InlineKeyboardButton("🌀 Скручивания",    callback_data="ex_crunch"),
+             InlineKeyboardButton("🦵 Подъём ног", callback_data="ex_leg_raise")],
+            [InlineKeyboardButton("🧗 Планка", callback_data="ex_plank"),
+             InlineKeyboardButton("💪 Отжимания", callback_data="ex_pushup")],
+            [InlineKeyboardButton("🌀 Скручивания", callback_data="ex_crunch"),
              InlineKeyboardButton("🤸 Разведение рук", callback_data="ex_lateral")],
-            [InlineKeyboardButton("✅ Готово!",         callback_data="ex_done")],
+            [InlineKeyboardButton("✅ Готово!", callback_data="ex_done")],
         ])
     )
 
 async def food_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    data = load_data(); save_data(data)
+    data = load_data()
+    save_data(data)
+
     await update.message.reply_text(
         "🍽️ *Что ел?* Отмечай:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🍳 Завтрак",       callback_data="food_breakfast"),
-             InlineKeyboardButton("🍗 Обед",          callback_data="food_lunch")],
-            [InlineKeyboardButton("🍚 Ужин",          callback_data="food_dinner"),
-             InlineKeyboardButton("🥛 Перекус",       callback_data="food_snack")],
-            [InlineKeyboardButton("🥤 Кола Zero ✅",  callback_data="food_cola_zero"),
-             InlineKeyboardButton("🥤 Обычная кола ❌",callback_data="food_cola_regular")],
+            [InlineKeyboardButton("🍳 Завтрак", callback_data="food_breakfast"),
+             InlineKeyboardButton("🍗 Обед", callback_data="food_lunch")],
+            [InlineKeyboardButton("🍚 Ужин", callback_data="food_dinner"),
+             InlineKeyboardButton("🥛 Перекус", callback_data="food_snack")],
+            [InlineKeyboardButton("🥤 Кола Zero ✅", callback_data="food_cola_zero"),
+             InlineKeyboardButton("🥤 Обычная кола ❌", callback_data="food_cola_regular")],
             [InlineKeyboardButton("🌯 Донер (читмил)", callback_data="food_cheat"),
-             InlineKeyboardButton("✅ Сохранить",      callback_data="food_done")],
+             InlineKeyboardButton("✅ Сохранить", callback_data="food_done")],
         ])
     )
 
@@ -253,11 +283,13 @@ async def skills_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = str(update.effective_user.id)
     user = get_user(uid, data)
     save_data(data)
+
     buttons = []
     for sid, sk in SKILLS.items():
         owned = user["skills"].get(sid, False)
         label = f"{'✅' if owned else '🔒'} {sk['name']} ({sk['cost']} SP)"
         buttons.append([InlineKeyboardButton(label, callback_data=f"skill_{sid}")])
+
     await update.message.reply_text(
         f"⚡ *Скиллы*\nТвои SP: 💎 {user['sp']}",
         parse_mode="Markdown",
@@ -269,13 +301,17 @@ async def boss_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = str(update.effective_user.id)
     user = get_user(uid, data)
     bosses = [b for b in BOSSES if b["min_level"] <= user["level"]]
+
     if not bosses:
         await update.message.reply_text("Качайся до 1 уровня сначала!")
-        save_data(data); return
-    idx = min(user.get("boss_index",0), len(bosses)-1)
+        save_data(data)
+        return
+
+    idx = min(user.get("boss_index", 0), len(bosses)-1)
     boss = bosses[idx]
     hp = user["boss_hp"] if user["boss_hp"] is not None else boss["hp"]
     save_data(data)
+
     await update.message.reply_text(
         f"🐉 *БОСС: {boss['name']}*\n\n"
         f"HP: {bar(hp, boss['hp'], 14)}\n{hp}/{boss['hp']}\n\n"
@@ -292,12 +328,13 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user = get_user(uid, data)
     save_data(data)
     t = user["today"]
+
     await update.message.reply_text(
         f"📊 *Итог дня — {t['date']}*\n\n"
-        f"{'✅' if t['steps']>=9000 else '❌'} Шаги: {t['steps']:,}/9000\n"
+        f"{'✅' if t['steps'] >= 9000 else '❌'} Шаги: {t['steps']:,}/9000\n"
         f"{'✅' if t['workouts'] else '❌'} Тренировок: {len(t['workouts'])}\n"
         f"  {', '.join(t['workouts']) if t['workouts'] else 'нет'}\n"
-        f"{'✅' if t['protein']>=120 else '⚠️'} Белок: {t['protein']}г/145г\n"
+        f"{'✅' if t['protein'] >= 120 else '⚠️'} Белок: {t['protein']}г/145г\n"
         f"🔥 Калории: {t['calories']} ккал\n\n"
         f"🔥 Streak: {user['streak']} дней подряд\n"
         f"✨ XP: {user['xp']}  💎 SP: {user['sp']}",
@@ -316,8 +353,6 @@ async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "/summary — итог дня",
         parse_mode="Markdown"
     )
-
-# ── КНОПКИ ───────────────────────────────
 
 async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -374,7 +409,7 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if fid in FOOD_DATA:
             name, kcal, prot = FOOD_DATA[fid]
             user["today"]["calories"] += kcal
-            user["today"]["protein"]  += prot
+            user["today"]["protein"] += prot
             xp_val = max(0, kcal // 20) if fid != "cola_regular" else -10
             xp_msg = add_xp(user, xp_val, "food") if xp_val > 0 else "−10 XP 😅"
             save_data(data)
@@ -388,7 +423,7 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🍽️ *Питание сохранено*\n\n"
             f"🔥 Калории: {t['calories']} ккал\n"
             f"🥩 Белок: {t['protein']}г\n\n"
-            f"{'✅ Белка достаточно!' if t['protein']>=120 else '⚠️ Добавь белка, цель 145г'}",
+            f"{'✅ Белка достаточно!' if t['protein'] >= 120 else '⚠️ Добавь белка, цель 145г'}",
             parse_mode="Markdown"
         )
         return
@@ -410,20 +445,22 @@ async def button_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     save_data(data)
 
-# ── ЗАПУСК ───────────────────────────────
-
 def main():
+    if not BOT_TOKEN:
+        raise ValueError("Переменная окружения BOT_TOKEN не задана")
+
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start",   start))
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("profile", profile))
-    app.add_handler(CommandHandler("steps",   steps_cmd))
+    app.add_handler(CommandHandler("steps", steps_cmd))
     app.add_handler(CommandHandler("workout", workout_cmd))
-    app.add_handler(CommandHandler("food",    food_cmd))
-    app.add_handler(CommandHandler("skills",  skills_cmd))
-    app.add_handler(CommandHandler("boss",    boss_cmd))
+    app.add_handler(CommandHandler("food", food_cmd))
+    app.add_handler(CommandHandler("skills", skills_cmd))
+    app.add_handler(CommandHandler("boss", boss_cmd))
     app.add_handler(CommandHandler("summary", summary_cmd))
-    app.add_handler(CommandHandler("help",    help_cmd))
+    app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CallbackQueryHandler(button_handler))
+
     print("⚔️ Fitness RPG Bot запущен!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
